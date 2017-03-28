@@ -55,7 +55,8 @@ for i in tqdm.tqdm(range(generation)):
 
 plt.plot(train_acc, label='Accuracy', color='blue')
 plt.plot(train_loss, label='Loss', color='red')
-plt.plot(test_acc, label='Test', color='green')
 plt.legend()
 plt.show()
-
+plt.close()
+plt.plot(test_acc, label='Test', color='green')
+plt.show()
