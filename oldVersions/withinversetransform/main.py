@@ -55,27 +55,9 @@ for i in tqdm.tqdm(range(generation)):
 
 plt.plot(train_acc, label='Accuracy', color='blue')
 plt.plot(train_loss, label='Loss', color='red')
-plt.title('Loss And Accuracy of the Train Set as a function of the number of epochs')
 plt.legend()
-plt.savefig('TrainLossAcc.png')
-
+plt.show()
 plt.close()
-x = np.linspace(0,generation, len(test_acc))
-windowsize= 5
-x2 = np.linspace(0, generation, len(test_acc)/windowsize)
-y2 = np.array([])
-mean = 0
 
-for j, i in enumerate(test_acc):
-    mean = mean + i
-    if j%windowsize ==0 :
-        mean/=windowsize
-        y2 = np.append(y2, mean)
-        mean = 0
-
-plt.plot(x, test_acc, label='Test Accuracy', color='green')
-plt.plot(x2, y2, label='Moving Average', color='red', linestyle='--')
-plt.title('Accuracy on the Test Set as a function of the number of epochs')
-plt.legend()
-plt.savefig('TestAcc.png')
-
+plt.plot(test_acc, label='Test', color='green')
+plt.show()

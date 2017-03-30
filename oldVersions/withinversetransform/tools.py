@@ -1,96 +1,87 @@
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import matplotlib.pyplot as plt
-import scipy.signal as sgl
-from hyperparameters import *
 
 def loadDataFrames(l):
-    ADeyesclosed = pd.read_pickle('data/ADeyesclosed.pk').as_matrix()
-    ADeyesopened = pd.read_pickle('data/ADeyesopened.pk').as_matrix()
 
+    ADeyesclosed = pd.read_pickle('data/CONTROLeyesclosed.pk').as_matrix()
+    ADeyesopened = pd.read_pickle('data/CONTROLeyesopened.pk').as_matrix()
+
+    l1 = len(ADeyesclosed[0,0]) - l
+    l2 = len(ADeyesopened[0,0]) - l
     EyesClosedMatrix = []
-    EyesOpenedMatrix = []
-    j = 29
-
-    for n in range(int(len(ADeyesclosed[0, 0]) / l)):
-        for i in range(ADeyesclosed.shape[0]):
-            EyesClosedMatrix.append(np.array(ADeyesclosed[i, j][n * l: n * l + l]))
-        for i in range(ADeyesopened.shape[0]):
-            EyesOpenedMatrix.append(np.array(ADeyesopened[i, j][n * l:n * l + l]))
-
+    for i in range(ADeyesclosed.shape[0]):
+        for j in range(1):
+            EyesClosedMatrix.append(np.array(ADeyesclosed[i,j][:len(ADeyesclosed[i,j])-l1]))
     EyesClosedMatrix = np.array(EyesClosedMatrix)
+
+    EyesOpenedMatrix = []
+    j=29
+    for i in range(ADeyesopened.shape[0]):
+            EyesOpenedMatrix.append(ADeyesopened[i,j][:len(ADeyesopened[i,j])-l2])
     EyesOpenedMatrix = np.array(EyesOpenedMatrix)
 
-    ADcompletetrain = np.concatenate((EyesOpenedMatrix[:int(train_set_size / 2)],
-                                      EyesClosedMatrix[:int(train_set_size / 2)]), axis=0)
 
+    ADcompletetrain = np.concatenate((EyesOpenedMatrix[:12],
+                                      EyesClosedMatrix[:12]), axis=0)
     ADcompletetrain = matrixnormalise(ADcompletetrain, 0, 1)
     ADcompletetrain = np.expand_dims(ADcompletetrain, 1)
 
-    ADcompletetest = np.concatenate(
-        (EyesOpenedMatrix[int(train_set_size / 2):int(train_set_size / 2) + int(test_set_size / 2)],
-         EyesClosedMatrix[int(train_set_size / 2):int(train_set_size / 2) + int(test_set_size / 2)]), axis=0)
+
+    ADcompletetest = np.concatenate((EyesOpenedMatrix[12:],
+                                     EyesClosedMatrix[12:]), axis=0)
     ADcompletetest = matrixnormalise(ADcompletetest, 0, 1)
     ADcompletetest = np.expand_dims(ADcompletetest, 1)
 
-    y_train = np.concatenate(
-        (np.zeros((int(train_set_size / 2),), dtype=np.int32), np.ones((int(train_set_size / 2)), dtype=int)), axis=0)
-    y_test = np.concatenate(
-        (np.zeros((int(test_set_size / 2),), dtype=np.int32), np.ones((int(test_set_size / 2),), dtype=int)), axis=0)
+
+    y_train = np.concatenate((np.zeros((12,), dtype=np.int32), np.ones((12,), dtype=int)), axis=0)
+    y_test = np.concatenate((np.zeros((7,), dtype=np.int32), np.ones((7,), dtype=int)), axis=0)
 
     return ADcompletetrain, y_train, ADcompletetest, y_test
 
 def cwt(input_data, widthCwt):
 
-    total_batch = input_data.get_shape().as_list()[0]
-    nbwave = input_data.get_shape().as_list()[1]
-    length = input_data.get_shape().as_list()[2]
+    total_batch = input_data.get_shape()[0]
+    length = input_data.get_shape()[2]
 
     output_data = []
     for batch in range(total_batch):
-        wavresult = []
-        for w in range(nbwave):
-            wav = input_data[batch, w]
-            wav = tf.expand_dims(wav, 0)
-            wav = tf.expand_dims(wav, 2)
-            wav = tf.expand_dims(wav, 3)
+        wav = input_data[batch]
+        wav = tf.expand_dims(wav, 2)
+        wav = tf.expand_dims(wav, 3)
 
-            # While loop functions
-            def body(i, m):
-                v = conv1DWavelet(wav, i, rickerWavelet)
-                v = tf.expand_dims(v, 1)
-                m = tf.concat(1, [m,v])
-                return [1 + i, m]
+        # While loop functions
+        def body(i, m):
+            v = conv1DWavelet(wav, i, rickerWavelet)
+            v = tf.expand_dims(v, 1)
+            m = tf.concat(1, [m,v])
+            return [1 + i, m]
 
-            def cond_(i, m):
-                return tf.less_equal(i, widthCwt)
+        def cond_(i, m):
+            return tf.less_equal(i, widthCwt)
 
-            # Initialize and run while loop
-            emptyCwtMatrix = tf.zeros([length, 0], dtype='float32')
-            i = tf.constant(1)
-            _, result = tf.while_loop(cond_, body, [i, emptyCwtMatrix], back_prop=False, parallel_iterations=1024,
-                                      shape_invariants=[i.get_shape(), tf.TensorShape([length, None])])
-            result = tf.transpose(result)
+        # Initialize and run while loop
+        emptyCwtMatrix = tf.zeros([length, 0], dtype='float32')
+        i = tf.constant(1)
+        _, result = tf.while_loop(cond_, body, [i, emptyCwtMatrix], back_prop=False, parallel_iterations=1024,
+                                  shape_invariants=[i.get_shape(), tf.TensorShape([length, None])])
+        result = tf.transpose(result)
 
-            wavresult.append(result)
-        wavresult = tf.stack(wavresult)
-        output_data.append(wavresult)
+        output_data.append(result)
 
     output_data = tf.stack(output_data, 0)
-    output_data = tf.reshape(output_data, shape=[total_batch, int(widthCwt * nbwave), length])
 
     return output_data
 
 def icwt(input_data, widthCwt):
 
-    total_batch = input_data.get_shape()[0]
-    len_TS = input_data.get_shape()[2]
+    total_batch = input_data.get_shape().as_list()[0]
+    len_TS = input_data.get_shape().as_list()[2]
     output_data = []
 
     for batch in range(total_batch):
-        Xbatch = input_data[batch]
 
+        Xbatch = input_data[batch]
         i = tf.constant(0, dtype=tf.int32)
 
         def body(X_ARR, Xbatch, i):
@@ -99,7 +90,7 @@ def icwt(input_data, widthCwt):
             new_wave = tf.expand_dims(new_wave, 0)
             i = tf.add(i, tf.constant(1))
 
-            if i==1:
+            if tf.equal(i, 0) is not None:
                 X_ARR = new_wave
 
             else:
@@ -116,10 +107,12 @@ def icwt(input_data, widthCwt):
                                                              Xbatch.get_shape(), i.get_shape()])
 
         x = tf.reduce_sum(X_ARR, 0)
+        x = tf.expand_dims(x, 0)
 
         output_data.append(tf.expand_dims(x, 0))
 
     output_data = tf.stack(output_data, 0)
+    output_data = tf.reshape(output_data, shape=[total_batch, 1, len_TS])
 
     return output_data
 
@@ -181,23 +174,3 @@ def get_accuracy(logits, targets):
     num_correct = np.sum(np.equal(batch_predictions, targets))
 
     return (100. * num_correct/batch_predictions.shape[0])
-
-def SGSmoothing(EEG):
-    return sgl.savgol_filter(EEG,11,2)
-
-def preprocess(dataframe):
-
-    new_df = pd.DataFrame(columns=dataframe.columns)
-
-    for i in range(0, dataframe.shape[0]):
-        row =[]
-        for j in dataframe.columns:
-
-            EEG = dataframe[j][i]
-            EEG = SGSmoothing(EEG)
-
-            row.append(EEG)
-
-        new_df.loc[i] = row
-
-    return new_df
